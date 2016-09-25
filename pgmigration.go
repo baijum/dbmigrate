@@ -10,20 +10,20 @@ import (
 	"strings"
 )
 
-// Database interface needs to be inmplemented to migrate a new type of database
-type Database interface {
-	CreateMigrationsTable() error
-	HasMigrated(filename string) (bool, error)
-	Migrate(filename string, migration string) error
+// database interface needs to be inmplemented to migrate a new type of database
+type database interface {
+	createMigrationsTable() error
+	hasMigrated(filename string) (bool, error)
+	migrate(filename string, migration string) error
 }
 
-// PostgresDatabase migrates Postgresql databases
-type PostgresDatabase struct {
+// postgresDatabase migrates Postgresql databases
+type postgresDatabase struct {
 	database *sql.DB
 }
 
 // CreateMigrationsTable create the table to keep track of versions of migration
-func (postgres *PostgresDatabase) CreateMigrationsTable() error {
+func (postgres *postgresDatabase) createMigrationsTable() error {
 	_, err := postgres.database.Exec(`
 		CREATE TABLE IF NOT EXISTS migrations (
 			id serial,
@@ -44,7 +44,7 @@ func (postgres *PostgresDatabase) CreateMigrationsTable() error {
 }
 
 // HasMigrated check for migration
-func (postgres *PostgresDatabase) HasMigrated(filename string) (bool, error) {
+func (postgres *postgresDatabase) hasMigrated(filename string) (bool, error) {
 	var count int
 	err := postgres.database.QueryRow("select count(1) from migrations where filename = $1", filename).Scan(&count)
 	if err != nil {
@@ -54,7 +54,7 @@ func (postgres *PostgresDatabase) HasMigrated(filename string) (bool, error) {
 }
 
 // Migrate perform exact migration
-func (postgres *PostgresDatabase) Migrate(filename string, migration string) error {
+func (postgres *postgresDatabase) migrate(filename string, migration string) error {
 	_, err := postgres.database.Exec(migration)
 	if err != nil {
 		return err
@@ -63,21 +63,21 @@ func (postgres *PostgresDatabase) Migrate(filename string, migration string) err
 	return err
 }
 
-// NewPostgresDatabase created a Postgresql connection
-func NewPostgresDatabase(db *sql.DB) *PostgresDatabase {
-	return &PostgresDatabase{database: db}
+// newPostgresDatabase created a Postgresql connection
+func newPostgresDatabase(db *sql.DB) *postgresDatabase {
+	return &postgresDatabase{database: db}
 }
 
-// Run By default, apply Postgresql migrations, as in older versions
+// Run PostgreSQL migrations
 func Run(db *sql.DB, migrationsFolder string) error {
-	postgres := NewPostgresDatabase(db)
-	return ApplyMigrations(postgres, migrationsFolder)
+	postgres := newPostgresDatabase(db)
+	return applyMigrations(postgres, migrationsFolder)
 }
 
-// ApplyMigrations Run applies migrations from migrationsFolder to database.
-func ApplyMigrations(database Database, migrationsFolder string) error {
+// applyMigrations Run applies migrations from migrationsFolder to database.
+func applyMigrations(database database, migrationsFolder string) error {
 	// Initialize migrations table, if it does not exist yet
-	if err := database.CreateMigrationsTable(); err != nil {
+	if err := database.createMigrationsTable(); err != nil {
 		return err
 	}
 
@@ -103,7 +103,7 @@ func ApplyMigrations(database Database, migrationsFolder string) error {
 	for _, filename := range sqlFiles {
 		// if exists in migrations table, leave it
 		// else execute sql
-		migrated, err := database.HasMigrated(filename)
+		migrated, err := database.hasMigrated(filename)
 		if err != nil {
 			return err
 		}
@@ -121,7 +121,7 @@ func ApplyMigrations(database Database, migrationsFolder string) error {
 			log.Println("Skipping empty file", fullpath)
 			continue // empty file
 		}
-		err = database.Migrate(filename, migration)
+		err = database.migrate(filename, migration)
 		if err != nil {
 			return err
 		}
