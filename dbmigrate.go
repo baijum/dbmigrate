@@ -1,4 +1,4 @@
-package dbmigrate
+package pgmigration
 
 import (
 	"database/sql"
@@ -8,79 +8,21 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/gocql/gocql"
 )
 
 // Database interface needs to be inmplemented to migrate a new type of database
-
 type Database interface {
 	CreateMigrationsTable() error
 	HasMigrated(filename string) (bool, error)
 	Migrate(filename string, migration string) error
 }
 
-// CassandraDatabase migrates Cassandra databases
-
-type CassandraDatabase struct {
-	readerSession *gocql.Session
-	writerSession *gocql.Session
-}
-
-func (cassandra *CassandraDatabase) CreateMigrationsTable() error {
-	err := cassandra.writerSession.Query(`
-		CREATE TABLE migrations (
-			name TEXT,
-			created_at TIMEUUID,
-			PRIMARY KEY (name)
-		);
-	`).Exec()
-	if err != nil {
-		if !strings.Contains(err.Error(), "Cannot add already existing column family") {
-			return err
-		}
-	}
-	fmt.Println("Created migrations table")
-	return nil
-}
-
-func (cassandra *CassandraDatabase) HasMigrated(filename string) (bool, error) {
-	var count int
-	iter := cassandra.readerSession.Query(`
-		SELECT COUNT(*) FROM migrations WHERE name = ?
-	`, filename).Iter()
-	if !iter.Scan(&count) {
-		return false, iter.Close()
-	}
-	if err := iter.Close(); err != nil {
-		return false, err
-	}
-	return count > 0, nil
-}
-
-func (cassandra *CassandraDatabase) Migrate(filename string, migration string) error {
-	if err := cassandra.writerSession.Query(migration).Exec(); err != nil {
-		return err
-	}
-	return cassandra.writerSession.Query(`
-		INSERT INTO migrations(name, created_at)
-		VALUES(?, NOW())
-	`, filename).Exec()
-}
-
-func NewCassandraDatabase(readerSession *gocql.Session, writerSession *gocql.Session) *CassandraDatabase {
-	return &CassandraDatabase{
-		readerSession: readerSession,
-		writerSession: writerSession,
-	}
-}
-
 // PostgresDatabase migrates Postgresql databases
-
 type PostgresDatabase struct {
 	database *sql.DB
 }
 
+// CreateMigrationsTable create the table to keep track of versions of migration
 func (postgres *PostgresDatabase) CreateMigrationsTable() error {
 	_, err := postgres.database.Exec(`
 		CREATE TABLE IF NOT EXISTS migrations (
@@ -101,6 +43,7 @@ func (postgres *PostgresDatabase) CreateMigrationsTable() error {
 	return nil
 }
 
+// HasMigrated check for migration
 func (postgres *PostgresDatabase) HasMigrated(filename string) (bool, error) {
 	var count int
 	err := postgres.database.QueryRow("select count(1) from migrations where name = $1", filename).Scan(&count)
@@ -110,6 +53,7 @@ func (postgres *PostgresDatabase) HasMigrated(filename string) (bool, error) {
 	return count > 0, nil
 }
 
+// Migrate perform exact migration
 func (postgres *PostgresDatabase) Migrate(filename string, migration string) error {
 	_, err := postgres.database.Exec(migration)
 	if err != nil {
@@ -119,17 +63,18 @@ func (postgres *PostgresDatabase) Migrate(filename string, migration string) err
 	return err
 }
 
+// NewPostgresDatabase created a Postgresql connection
 func NewPostgresDatabase(db *sql.DB) *PostgresDatabase {
 	return &PostgresDatabase{database: db}
 }
 
-// By default, apply Postgresql migrations, as in older versions
+// Run By default, apply Postgresql migrations, as in older versions
 func Run(db *sql.DB, migrationsFolder string) error {
 	postgres := NewPostgresDatabase(db)
 	return ApplyMigrations(postgres, migrationsFolder)
 }
 
-// Run applies migrations from migrationsFolder to database.
+// ApplyMigrations Run applies migrations from migrationsFolder to database.
 func ApplyMigrations(database Database, migrationsFolder string) error {
 	// Initialize migrations table, if it does not exist yet
 	if err := database.CreateMigrationsTable(); err != nil {
@@ -147,10 +92,10 @@ func ApplyMigrations(database Database, migrationsFolder string) error {
 	}
 
 	// Run migrations
-	sqlFiles := make([]string, 0)
+	var sqlFiles []string
 	for _, f := range dir {
 		ext := filepath.Ext(f.Name())
-		if ".sql" == ext || ".cql" == ext {
+		if ".sql" == ext {
 			sqlFiles = append(sqlFiles, f.Name())
 		}
 	}
