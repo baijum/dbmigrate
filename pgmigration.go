@@ -64,7 +64,7 @@ func (postgres *Postgres) migrateScript(filename string, migration string) error
 }
 
 // Migrate run external migrations
-func (postgres *Postgres) Migrate(migrations func() error, name string) error {
+func (postgres *Postgres) Migrate(name string, migrations func() error) error {
 	err := migrations()
 	if err != nil {
 		return err
