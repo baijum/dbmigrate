@@ -13,28 +13,28 @@ import (
 // database interface needs to be inmplemented to migrate a new type of database
 type database interface {
 	createMigrationsTable() error
-	hasMigrated(filename string) (bool, error)
-	migrate(filename string, migration string) error
+	hasMigrated(name string) (bool, error)
+	migrateScript(filename string, migration string) error
 }
 
-// postgresDatabase migrates Postgresql databases
-type postgresDatabase struct {
+// Postgres migrates PostgreSQL databases
+type Postgres struct {
 	database *sql.DB
 }
 
 // CreateMigrationsTable create the table to keep track of versions of migration
-func (postgres *postgresDatabase) createMigrationsTable() error {
+func (postgres *Postgres) createMigrationsTable() error {
 	_, err := postgres.database.Exec(`
 		CREATE TABLE IF NOT EXISTS migrations (
 			id SERIAL,
-			filename TEXT NOT NULL,
+			name TEXT NOT NULL,
 			created_at TIMESTAMP WITH TIME ZONE NOT NULL,
 			CONSTRAINT "PK_migrations_id" PRIMARY KEY (id)
 	);`)
 	if err != nil {
 		return err
 	}
-	_, err = postgres.database.Exec("CREATE UNIQUE INDEX idx_migrations_name ON migrations(filename)")
+	_, err = postgres.database.Exec("CREATE UNIQUE INDEX idx_migrations_name ON migrations(name)")
 	if err != nil {
 		if !strings.Contains(err.Error(), "already exists") {
 			return err
@@ -44,9 +44,9 @@ func (postgres *postgresDatabase) createMigrationsTable() error {
 }
 
 // HasMigrated check for migration
-func (postgres *postgresDatabase) hasMigrated(filename string) (bool, error) {
+func (postgres *Postgres) hasMigrated(name string) (bool, error) {
 	var count int
-	err := postgres.database.QueryRow("SELECT count(1) FROM migrations WHERE filename = $1", filename).Scan(&count)
+	err := postgres.database.QueryRow("SELECT count(1) FROM migrations WHERE name = $1", name).Scan(&count)
 	if err != nil {
 		return false, err
 	}
@@ -54,19 +54,29 @@ func (postgres *postgresDatabase) hasMigrated(filename string) (bool, error) {
 }
 
 // Migrate perform exact migration
-func (postgres *postgresDatabase) migrate(filename string, migration string) error {
+func (postgres *Postgres) migrateScript(filename string, migration string) error {
 	_, err := postgres.database.Exec(migration)
 	if err != nil {
 		return err
 	}
-	_, err = postgres.database.Exec("INSERT INTO migrations(filename, created_at) VALUES($1, current_timestamp)", filename)
+	_, err = postgres.database.Exec("INSERT INTO migrations(name, created_at) VALUES($1, current_timestamp)", filename)
 	return err
 }
 
-// Run PostgreSQL migrations
-func Run(db *sql.DB, migrationsFolder string) error {
-	postgres := &postgresDatabase{database: db}
-	return applyMigrations(postgres, migrationsFolder)
+// Migrate run external migrations
+func (postgres *Postgres) Migrate(migrations func() error, name string) error {
+	err := migrations()
+	if err != nil {
+		return err
+	}
+	_, err = postgres.database.Exec("INSERT INTO migrations(name, created_at) VALUES($1, current_timestamp)", name)
+	return err
+}
+
+// Run migrations written in SQL scripts
+func Run(db *sql.DB, migrationsFolder string) (*Postgres, error) {
+	postgres := &Postgres{database: db}
+	return postgres, applyMigrations(postgres, migrationsFolder)
 }
 
 // applyMigrations applies migrations from migrationsFolder to database.
@@ -116,7 +126,7 @@ func applyMigrations(database database, migrationsFolder string) error {
 			log.Println("Skipping empty file", fullpath)
 			continue // empty file
 		}
-		err = database.migrate(filename, migration)
+		err = database.migrateScript(filename, migration)
 		if err != nil {
 			return err
 		}
