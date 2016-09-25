@@ -32,8 +32,12 @@ app, run the migrations.  Assuming you have a variable called "db"
 that points to "sql.DB" and the migrations are located in
 "db/migrate", execute the following code:
 
-    if err := pgmigration.Run(db, filepath.Join("db", "migrate")); err != nil {
+    if pg, err := pgmigration.Run(db, filepath.Join("db", "migrate")); err != nil {
         log.Fatal(err)
     }
+    pg.Migrate("unique-migrations-name", func() error {...})
+
+The "Migrate" method can be called to run any migrations written inside
+your code.
 */
 package pgmigration
