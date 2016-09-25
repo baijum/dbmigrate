@@ -21,7 +21,7 @@ import (
   "log"
   "path/filepath"
 
-  "github.com/tanel/dbmigrate"
+  "github.com/baijum/pgmigration"
 )
 ```
 
@@ -34,7 +34,11 @@ run the migrations. Assuming you have a variable called **db** that points to sq
 and the migrations are located in **db/migrate**, execute the following code:
 
 ```golang
-if err := dbmigrate.Run(db, filepath.Join("db", "migrate")); err != nil {
+if err := pgmigration.Run(db, filepath.Join("db", "migrate")); err != nil {
   log.Fatal(err)
 }
 ```
+
+## Credits
+
+This is a fork of https://github.com/tanel/dbmigrate
