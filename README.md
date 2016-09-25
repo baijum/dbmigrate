@@ -41,4 +41,4 @@ if err := pgmigration.Run(db, filepath.Join("db", "migrate")); err != nil {
 
 ## Credits
 
-This is a fork of https://github.com/tanel/dbmigrate
+This project is a fork of https://github.com/tanel/dbmigrate written by Tanel Lebedev
