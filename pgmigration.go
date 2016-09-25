@@ -2,8 +2,8 @@ package pgmigration
 
 import (
 	"database/sql"
-	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -109,7 +109,7 @@ func ApplyMigrations(database Database, migrationsFolder string) error {
 		}
 		fullpath := filepath.Join(migrationsFolder, filename)
 		if migrated {
-			fmt.Println("Already migrated", fullpath)
+			log.Println("Already migrated", fullpath)
 			continue
 		}
 		b, err := ioutil.ReadFile(fullpath)
@@ -118,14 +118,14 @@ func ApplyMigrations(database Database, migrationsFolder string) error {
 		}
 		migration := string(b)
 		if len(migration) == 0 {
-			fmt.Println("Skipping empty file", fullpath)
+			log.Println("Skipping empty file", fullpath)
 			continue // empty file
 		}
 		err = database.Migrate(filename, migration)
 		if err != nil {
 			return err
 		}
-		fmt.Println("Migrated", fullpath)
+		log.Println("Migrated", fullpath)
 	}
 
 	return nil
