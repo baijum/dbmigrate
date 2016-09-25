@@ -26,15 +26,15 @@ type PostgresDatabase struct {
 func (postgres *PostgresDatabase) CreateMigrationsTable() error {
 	_, err := postgres.database.Exec(`
 		CREATE TABLE IF NOT EXISTS migrations (
-			id serial, 
-			name text NOT NULL, 
+			id serial,
+			filename text NOT NULL,
 			created_at timestamp with time zone NOT NULL,
 			CONSTRAINT "PK_migrations_id" PRIMARY KEY (id)
 	);`)
 	if err != nil {
 		return err
 	}
-	_, err = postgres.database.Exec("create unique index idx_migrations_name on migrations(name)")
+	_, err = postgres.database.Exec("create unique index idx_migrations_name on migrations(filename)")
 	if err != nil {
 		if !strings.Contains(err.Error(), "already exists") {
 			return err
@@ -46,7 +46,7 @@ func (postgres *PostgresDatabase) CreateMigrationsTable() error {
 // HasMigrated check for migration
 func (postgres *PostgresDatabase) HasMigrated(filename string) (bool, error) {
 	var count int
-	err := postgres.database.QueryRow("select count(1) from migrations where name = $1", filename).Scan(&count)
+	err := postgres.database.QueryRow("select count(1) from migrations where filename = $1", filename).Scan(&count)
 	if err != nil {
 		return false, err
 	}
@@ -59,7 +59,7 @@ func (postgres *PostgresDatabase) Migrate(filename string, migration string) err
 	if err != nil {
 		return err
 	}
-	_, err = postgres.database.Exec("insert into migrations(name, created_at) values($1, current_timestamp)", filename)
+	_, err = postgres.database.Exec("insert into migrations(filename, created_at) values($1, current_timestamp)", filename)
 	return err
 }
 
