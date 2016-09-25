@@ -1,5 +1,7 @@
 # PostgreSQL Database Migrations
 
+[![GoDoc](https://godoc.org/github.com/baijum/pgmigration?status.svg)](https://godoc.org/github.com/baijum/pgmigration)
+
 ## Install
 
 In your project, place your migrations in a separate folder, for
