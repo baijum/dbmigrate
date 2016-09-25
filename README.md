@@ -17,7 +17,7 @@ applied to your DB**.
 
 ## Use
 
-In your app code, import dbmigrate package:
+In your app code, import `pgmigration` package:
 ```golang
 import (
     "log"
