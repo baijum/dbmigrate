@@ -26,15 +26,15 @@ type postgresDatabase struct {
 func (postgres *postgresDatabase) createMigrationsTable() error {
 	_, err := postgres.database.Exec(`
 		CREATE TABLE IF NOT EXISTS migrations (
-			id serial,
-			filename text NOT NULL,
-			created_at timestamp with time zone NOT NULL,
+			id SERIAL,
+			filename TEXT NOT NULL,
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL,
 			CONSTRAINT "PK_migrations_id" PRIMARY KEY (id)
 	);`)
 	if err != nil {
 		return err
 	}
-	_, err = postgres.database.Exec("create unique index idx_migrations_name on migrations(filename)")
+	_, err = postgres.database.Exec("CREATE UNIQUE INDEX idx_migrations_name ON migrations(filename)")
 	if err != nil {
 		if !strings.Contains(err.Error(), "already exists") {
 			return err
@@ -46,7 +46,7 @@ func (postgres *postgresDatabase) createMigrationsTable() error {
 // HasMigrated check for migration
 func (postgres *postgresDatabase) hasMigrated(filename string) (bool, error) {
 	var count int
-	err := postgres.database.QueryRow("select count(1) from migrations where filename = $1", filename).Scan(&count)
+	err := postgres.database.QueryRow("SELECT count(1) FROM migrations WHERE filename = $1", filename).Scan(&count)
 	if err != nil {
 		return false, err
 	}
@@ -59,22 +59,17 @@ func (postgres *postgresDatabase) migrate(filename string, migration string) err
 	if err != nil {
 		return err
 	}
-	_, err = postgres.database.Exec("insert into migrations(filename, created_at) values($1, current_timestamp)", filename)
+	_, err = postgres.database.Exec("INSERT INTO migrations(filename, created_at) VALUES($1, current_timestamp)", filename)
 	return err
-}
-
-// newPostgresDatabase created a Postgresql connection
-func newPostgresDatabase(db *sql.DB) *postgresDatabase {
-	return &postgresDatabase{database: db}
 }
 
 // Run PostgreSQL migrations
 func Run(db *sql.DB, migrationsFolder string) error {
-	postgres := newPostgresDatabase(db)
+	postgres := &postgresDatabase{database: db}
 	return applyMigrations(postgres, migrationsFolder)
 }
 
-// applyMigrations Run applies migrations from migrationsFolder to database.
+// applyMigrations applies migrations from migrationsFolder to database.
 func applyMigrations(database database, migrationsFolder string) error {
 	// Initialize migrations table, if it does not exist yet
 	if err := database.createMigrationsTable(); err != nil {
