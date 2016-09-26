@@ -1,6 +1,10 @@
 /*
 Package pgmigration provides support for PostgreSQL database migrations
 
+This package provide support for migrations written in plain SQL
+scripts and also in the Go code.  The migrations written in Go code is
+supported through the `Migrate` function (see below).
+
 In your project, place your migrations in a separate folder, for
 example, "db/migrate".
 
