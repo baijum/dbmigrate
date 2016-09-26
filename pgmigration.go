@@ -63,7 +63,7 @@ func (postgres *Postgres) migrateScript(filename string, migration string) error
 	return err
 }
 
-// Migrate run external migrations
+// Migrate run migrations written in your code using ORM or any other SQL toolkit
 func (postgres *Postgres) Migrate(name string, migrations func() error) error {
 	err := migrations()
 	if err != nil {

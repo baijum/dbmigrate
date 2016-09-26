@@ -5,6 +5,9 @@
 Package pgmigration provides support for PostgreSQL database
 migrations.
 
+Note: This package is not setting transaction boundary.  So, you need
+to wrap the migration invocation within a database transaction.
+
 ## Install
 
 This package provide support for migrations written in plain SQL
