@@ -18,6 +18,14 @@ is used later on to detect which migrations have already been applied.
 In other words, don't rename your migration files once they've been
 applied to your DB.
 
+Install go-bindata ( https://github.com/jteeuwen/go-bindata ) and run
+this command:
+
+    go-bindata -pkg myapp -o bindata.go db/migrate/
+
+The "bindata.go" file will contain your migrations. Regenerate your
+"bindata.go" file whenever you add migrations.
+
 In your app code, import pgmigration package:
 
     import (
@@ -36,11 +44,15 @@ app, run the migrations.  Assuming you have a variable called "db"
 that points to "sql.DB" and the migrations are located in
 "db/migrate", execute the following code:
 
-    if pg, err := pgmigration.Run(db, filepath.Join("db", "migrate")); err != nil {
+    ms := pgmigration.MigrationsSource{
+        AssetDir: AssetDir,
+        Dir: "db/migrate",
+    }
+    if pg, err := pgmigration.Run(db, ms); err != nil {
         log.Fatal(err)
     }
-    pg.Migrate("unique-migrations-name-00001", func() error {...})
-    pg.Migrate("unique-migrations-name-00002", func() error {...})
+    pg.Migrate("unique-migrations-name-00001", func(tx *sql.TX) error {...})
+    pg.Migrate("unique-migrations-name-00002", func(tx *sql.TX) error {...})
 
 The "Migrate" method can be called to run any migrations written inside
 your code.
