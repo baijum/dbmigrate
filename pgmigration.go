@@ -74,20 +74,20 @@ func (postgres *Postgres) Migrate(name string, migrations func() error) error {
 }
 
 // Run migrations written in SQL scripts
-func Run(db *sql.DB, migrationsFolder string) (*Postgres, error) {
+func Run(db *sql.DB, migrationsSource MigrationsSource) (*Postgres, error) {
 	postgres := &Postgres{database: db}
-	return postgres, applyMigrations(postgres, migrationsFolder)
+	return postgres, applyMigrations(postgres, migrationsSource)
 }
 
-// applyMigrations applies migrations from migrationsFolder to database.
-func applyMigrations(database database, migrationsFolder string) error {
+// applyMigrations applies migrations from migrationsSource to database.
+func applyMigrations(database database, migrationsSource MigrationsSource) error {
 	// Initialize migrations table, if it does not exist yet
 	if err := database.createMigrationsTable(); err != nil {
 		return err
 	}
 
 	// Scan migration file names in migrations folder
-	d, err := os.Open(migrationsFolder)
+	d, err := os.Open(migrationsSource.Dir)
 	if err != nil {
 		return err
 	}
@@ -96,8 +96,10 @@ func applyMigrations(database database, migrationsFolder string) error {
 		return err
 	}
 
-	// Run migrations
-	var sqlFiles []string
+	sqlFiles, err := migrationsSource.findMigrations()
+	if err != nil {
+		return err
+	}
 	for _, f := range dir {
 		ext := filepath.Ext(f.Name())
 		if ".sql" == ext {
@@ -112,7 +114,7 @@ func applyMigrations(database database, migrationsFolder string) error {
 		if err != nil {
 			return err
 		}
-		fullpath := filepath.Join(migrationsFolder, filename)
+		fullpath := filepath.Join(migrationsSource.Dir, filename)
 		if migrated {
 			log.Println("Already migrated", fullpath)
 			continue
@@ -126,6 +128,7 @@ func applyMigrations(database database, migrationsFolder string) error {
 			log.Println("Skipping empty file", fullpath)
 			continue // empty file
 		}
+		// Run migrations
 		err = database.migrateScript(filename, migration)
 		if err != nil {
 			return err
@@ -134,4 +137,19 @@ func applyMigrations(database database, migrationsFolder string) error {
 	}
 
 	return nil
+}
+
+// MigrationsSource includes migrations diectory and bindata AssetDir call back function
+type MigrationsSource struct {
+
+	// AssetDir should return list of files in the path
+	AssetDir func(path string) ([]string, error)
+
+	// Path in the bindata to use.
+	Dir string
+}
+
+// findMigrations get all migrations
+func (a MigrationsSource) findMigrations() ([]string, error) {
+	return a.AssetDir(a.Dir)
 }
