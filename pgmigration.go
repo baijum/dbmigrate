@@ -24,23 +24,35 @@ type Postgres struct {
 
 // CreateMigrationsTable create the table to keep track of versions of migration
 func (postgres *Postgres) createMigrationsTable() error {
-	_, err := postgres.database.Exec(`
+	tx, err := postgres.database.Begin()
+	if err != nil {
+		return err
+	}
+	err := func(tx *sql.TX) error {
+		_, err := tx.Exec(`
 		CREATE TABLE IF NOT EXISTS migrations (
 			id SERIAL,
 			name TEXT NOT NULL,
 			created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-			CONSTRAINT "PK_migrations_id" PRIMARY KEY (id)
-	);`)
-	if err != nil {
-		return err
-	}
-	_, err = postgres.database.Exec("CREATE UNIQUE INDEX idx_migrations_name ON migrations(name)")
-	if err != nil {
-		if !strings.Contains(err.Error(), "already exists") {
+			CONSTRAINT "pk_migrations_id" PRIMARY KEY (id)
+		);`)
+		if err != nil {
 			return err
 		}
+		_, err = tx.Exec("CREATE UNIQUE INDEX idx_migrations_name ON migrations(name)")
+		if err != nil {
+			if !strings.Contains(err.Error(), "already exists") {
+				return err
+			}
+		}
+		return nil
+	}()
+	if err != nil {
+		tx.Rollback()
+		return err
 	}
-	return nil
+	tx.Commit()
+	return err
 }
 
 // HasMigrated check for migration
@@ -55,21 +67,46 @@ func (postgres *Postgres) hasMigrated(name string) (bool, error) {
 
 // Migrate perform exact migration
 func (postgres *Postgres) migrateScript(filename string, migration string) error {
-	_, err := postgres.database.Exec(migration)
+	tx, err := postgres.database.Begin()
 	if err != nil {
 		return err
 	}
-	_, err = postgres.database.Exec("INSERT INTO migrations(name, created_at) VALUES($1, current_timestamp)", filename)
+	err := func(tx *sql.TX) error {
+		_, err := postgres.database.Exec(migration)
+		if err != nil {
+			return err
+		}
+		_, err = postgres.database.Exec("INSERT INTO migrations(name, created_at) VALUES($1, current_timestamp)", filename)
+		return err
+	}()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	tx.Commit()
 	return err
 }
 
 // Migrate run migrations written in your code using ORM or any other SQL toolkit
-func (postgres *Postgres) Migrate(name string, migrations func() error) error {
-	err := migrations()
+// built on database/sql package.
+func (postgres *Postgres) Migrate(name string, migrations func(tx *sql.TX) error) error {
+	tx, err := postgres.database.Begin()
 	if err != nil {
 		return err
 	}
-	_, err = postgres.database.Exec("INSERT INTO migrations(name, created_at) VALUES($1, current_timestamp)", name)
+	err := func(tx *sql.TX) error {
+		err := migrations(tx)
+		if err != nil {
+			return err
+		}
+		_, err = postgres.database.Exec("INSERT INTO migrations(name, created_at) VALUES($1, current_timestamp)", name)
+		return err
+	}()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	tx.Commit()
 	return err
 }
 

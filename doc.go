@@ -1,9 +1,6 @@
 /*
 Package pgmigration provides support for PostgreSQL database migrations.
 
-Note: This package is not setting transaction boundary.  So, you need
-to wrap the migration invocation within a database transaction.
-
 This package provide support for migrations written in plain SQL
 scripts and also in the Go code.  The migrations written in Go code is
 supported through the "Migrate" function (see below).
