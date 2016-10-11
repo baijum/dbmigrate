@@ -2,9 +2,7 @@ package pgmigration
 
 import (
 	"database/sql"
-	"io/ioutil"
 	"log"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -28,7 +26,7 @@ func (postgres *Postgres) createMigrationsTable() error {
 	if err != nil {
 		return err
 	}
-	err := func(tx *sql.TX) error {
+	err = func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 		CREATE TABLE IF NOT EXISTS migrations (
 			id SERIAL,
@@ -46,7 +44,7 @@ func (postgres *Postgres) createMigrationsTable() error {
 			}
 		}
 		return nil
-	}()
+	}(tx)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -71,14 +69,14 @@ func (postgres *Postgres) migrateScript(filename string, migration string) error
 	if err != nil {
 		return err
 	}
-	err := func(tx *sql.TX) error {
+	err = func(tx *sql.Tx) error {
 		_, err := postgres.database.Exec(migration)
 		if err != nil {
 			return err
 		}
 		_, err = postgres.database.Exec("INSERT INTO migrations(name, created_at) VALUES($1, current_timestamp)", filename)
 		return err
-	}()
+	}(tx)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -89,19 +87,19 @@ func (postgres *Postgres) migrateScript(filename string, migration string) error
 
 // Migrate run migrations written in your code using ORM or any other SQL toolkit
 // built on database/sql package.
-func (postgres *Postgres) Migrate(name string, migrations func(tx *sql.TX) error) error {
+func (postgres *Postgres) Migrate(name string, migrations func(tx *sql.Tx) error) error {
 	tx, err := postgres.database.Begin()
 	if err != nil {
 		return err
 	}
-	err := func(tx *sql.TX) error {
+	err = func(tx *sql.Tx) error {
 		err := migrations(tx)
 		if err != nil {
 			return err
 		}
 		_, err = postgres.database.Exec("INSERT INTO migrations(name, created_at) VALUES($1, current_timestamp)", name)
 		return err
-	}()
+	}(tx)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -123,46 +121,31 @@ func applyMigrations(database database, migrationsSource MigrationsSource) error
 		return err
 	}
 
-	// Scan migration file names in migrations folder
-	d, err := os.Open(migrationsSource.Dir)
-	if err != nil {
-		return err
-	}
-	dir, err := d.Readdir(-1)
-	if err != nil {
-		return err
-	}
-
-	sqlFiles, err := migrationsSource.findMigrations()
-	if err != nil {
-		return err
-	}
-	for _, f := range dir {
-		ext := filepath.Ext(f.Name())
-		if ".sql" == ext {
-			sqlFiles = append(sqlFiles, f.Name())
-		}
-	}
+	sqlFiles := migrationsSource.AssetNames()
 	sort.Strings(sqlFiles)
 	for _, filename := range sqlFiles {
+		ext := filepath.Ext(filename)
+		if ".sql" != ext {
+			continue
+		}
+
 		// if exists in migrations table, leave it
 		// else execute sql
 		migrated, err := database.hasMigrated(filename)
 		if err != nil {
 			return err
 		}
-		fullpath := filepath.Join(migrationsSource.Dir, filename)
 		if migrated {
-			log.Println("Already migrated", fullpath)
+			log.Println("Already migrated", filename)
 			continue
 		}
-		b, err := ioutil.ReadFile(fullpath)
+		b, err := migrationsSource.Asset(filename)
 		if err != nil {
 			return err
 		}
 		migration := string(b)
 		if len(migration) == 0 {
-			log.Println("Skipping empty file", fullpath)
+			log.Println("Skipping empty file", filename)
 			continue // empty file
 		}
 		// Run migrations
@@ -170,7 +153,7 @@ func applyMigrations(database database, migrationsSource MigrationsSource) error
 		if err != nil {
 			return err
 		}
-		log.Println("Migrated", fullpath)
+		log.Println("Migrated", filename)
 	}
 
 	return nil
@@ -178,15 +161,16 @@ func applyMigrations(database database, migrationsSource MigrationsSource) error
 
 // MigrationsSource includes migrations diectory and bindata AssetDir call back function
 type MigrationsSource struct {
-
-	// AssetDir should return list of files in the path
-	AssetDir func(path string) ([]string, error)
-
-	// Path in the bindata to use.
-	Dir string
+	AssetNames func() []string
+	Asset      func(name string) ([]byte, error)
 }
 
-// findMigrations get all migrations
-func (a MigrationsSource) findMigrations() ([]string, error) {
-	return a.AssetDir(a.Dir)
+// NewMigrationsSource create a migratios source object
+// which includes migrations diectory and bindata AssetDir call back function
+func NewMigrationsSource(assetNames func() []string, asset func(name string) ([]byte, error)) MigrationsSource {
+	ms := MigrationsSource{
+		AssetNames: assetNames,
+		Asset:      asset,
+	}
+	return ms
 }
