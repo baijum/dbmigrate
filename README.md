@@ -35,11 +35,7 @@ The `bindata.go` file will contain your migrations. Regenerate your
 
 In your app code, import `pgmigration` package:
 ```golang
-import (
-    "log"
-
-    "github.com/baijum/pgmigration"
-)
+import "github.com/baijum/pgmigration"
 ```
 
 Then, run the migrations.
