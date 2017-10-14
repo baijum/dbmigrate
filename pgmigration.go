@@ -85,37 +85,10 @@ func (postgres *Postgres) migrateScript(filename string, migration string) error
 	return err
 }
 
-// Migrate run migrations written in your code using ORM or any other SQL toolkit
-// built on database/sql package.
-func (postgres *Postgres) Migrate(name string, migrations func(tx *sql.Tx) error) error {
-	tx, err := postgres.database.Begin()
-	if err != nil {
-		return err
-	}
-	err = func(tx *sql.Tx) error {
-		err := migrations(tx)
-		if err != nil {
-			return err
-		}
-		_, err = postgres.database.Exec("INSERT INTO migrations(name, created_at) VALUES($1, current_timestamp)", name)
-		return err
-	}(tx)
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-	tx.Commit()
-	return err
-}
-
 // Run migrations written in SQL scripts
-func Run(db *sql.DB, migrationsSource MigrationsSource) (*Postgres, error) {
-	postgres := &Postgres{database: db}
-	return postgres, applyMigrations(postgres, migrationsSource)
-}
+func Run(db *sql.DB, migrationsSource MigrationsSource) error {
+	database := &Postgres{database: db}
 
-// applyMigrations applies migrations from migrationsSource to database.
-func applyMigrations(database database, migrationsSource MigrationsSource) error {
 	// Initialize migrations table, if it does not exist yet
 	if err := database.createMigrationsTable(); err != nil {
 		return err

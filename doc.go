@@ -2,8 +2,7 @@
 Package pgmigration provides support for PostgreSQL database migrations.
 
 This package provide support for migrations written in plain SQL
-scripts and also in the Go code.  The migrations written in Go code is
-supported through the "Migrate" function (see below).
+scripts.
 
 In your project, place your migrations in a separate folder, for
 example, "db/migrations".
@@ -49,19 +48,8 @@ that points to "sql.DB" and the migrations are located in
 	// SchemaMigrate migrate database schema
 	func SchemaMigrate() error {
 		ms := pgmigration.NewMigrationsSource(AssetNames, Asset)
-		var err error
-		pg, err := pgmigration.Run(DB, ms)
-		if err != nil {
-			return err
-		}
-		err = pg.Migrate("unique-code-migrations-name-00001", func(tx *sql.Tx) error { return nil })
-		if err != nil {
-			return err
-		}
-		return err
+		return pgmigration.Run(DB, ms)
 	}
 
-The "Migrate" method can be called to run any migrations written inside
-your code.
 */
 package pgmigration
