@@ -15,13 +15,13 @@ type database interface {
 	migrateScript(filename string, migration string) error
 }
 
-// Postgres migrates PostgreSQL databases
-type Postgres struct {
+// postgres migrates PostgreSQL databases
+type postgres struct {
 	database *sql.DB
 }
 
 // CreateMigrationsTable create the table to keep track of versions of migration
-func (postgres *Postgres) createMigrationsTable() error {
+func (postgres *postgres) createMigrationsTable() error {
 	tx, err := postgres.database.Begin()
 	if err != nil {
 		return err
@@ -54,7 +54,7 @@ func (postgres *Postgres) createMigrationsTable() error {
 }
 
 // HasMigrated check for migration
-func (postgres *Postgres) hasMigrated(name string) (bool, error) {
+func (postgres *postgres) hasMigrated(name string) (bool, error) {
 	var count int
 	err := postgres.database.QueryRow("SELECT count(1) FROM migrations WHERE name = $1", name).Scan(&count)
 	if err != nil {
@@ -64,7 +64,7 @@ func (postgres *Postgres) hasMigrated(name string) (bool, error) {
 }
 
 // Migrate perform exact migration
-func (postgres *Postgres) migrateScript(filename string, migration string) error {
+func (postgres *postgres) migrateScript(filename string, migration string) error {
 	tx, err := postgres.database.Begin()
 	if err != nil {
 		return err
@@ -87,7 +87,7 @@ func (postgres *Postgres) migrateScript(filename string, migration string) error
 
 // Run migrations written in SQL scripts
 func Run(db *sql.DB, migrationsSource MigrationsSource) error {
-	database := &Postgres{database: db}
+	database := &postgres{database: db}
 
 	// Initialize migrations table, if it does not exist yet
 	if err := database.createMigrationsTable(); err != nil {
