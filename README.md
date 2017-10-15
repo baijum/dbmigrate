@@ -54,9 +54,12 @@ var DB *sql.DB
 
 // SchemaMigrate migrate database schema
 func SchemaMigrate() error {
-	return pgmigration.Migrate(DB, AssetNames, Asset)
+	return pgmigration.Migrate(DB, AssetNames, Asset, nil)
 }
 ```
+
+The last argument is string pointer which can refer to the last script,
+if there is any.  This will be useful to write tests.
 
 ## Credits
 
