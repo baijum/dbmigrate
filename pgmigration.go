@@ -8,42 +8,24 @@ import (
 	"strings"
 )
 
-// database interface needs to be inmplemented to migrate a new type of database
-type database interface {
-	createMigrationsTable() error
-	hasMigrated(name string) (bool, error)
-	migrateScript(filename string, migration string) error
-}
-
-// postgres migrates PostgreSQL databases
 type postgres struct {
-	database *sql.DB
+	db *sql.DB
 }
 
 // CreateMigrationsTable create the table to keep track of versions of migration
-func (postgres *postgres) createMigrationsTable() error {
-	tx, err := postgres.database.Begin()
+func (pg *postgres) createMigrationsTable() error {
+	tx, err := pg.db.Begin()
 	if err != nil {
 		return err
 	}
 	err = func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 		CREATE TABLE IF NOT EXISTS migrations (
-			id SERIAL,
-			name TEXT NOT NULL,
-			created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-			CONSTRAINT "pk_migrations_id" PRIMARY KEY (id)
+			id BIGSERIAL PRIMARY KEY,
+			name TEXT UNIQUE NOT NULL,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 		);`)
-		if err != nil {
-			return err
-		}
-		_, err = tx.Exec("CREATE UNIQUE INDEX idx_migrations_name ON migrations(name)")
-		if err != nil {
-			if !strings.Contains(err.Error(), "already exists") {
-				return err
-			}
-		}
-		return nil
+		return err
 	}(tx)
 	if err != nil {
 		tx.Rollback()
@@ -54,9 +36,9 @@ func (postgres *postgres) createMigrationsTable() error {
 }
 
 // HasMigrated check for migration
-func (postgres *postgres) hasMigrated(name string) (bool, error) {
+func (pg *postgres) hasMigrated(name string) (bool, error) {
 	var count int
-	err := postgres.database.QueryRow("SELECT count(1) FROM migrations WHERE name = $1", name).Scan(&count)
+	err := pg.db.QueryRow("SELECT count(1) FROM migrations WHERE name = $1", name).Scan(&count)
 	if err != nil {
 		return false, err
 	}
@@ -64,17 +46,17 @@ func (postgres *postgres) hasMigrated(name string) (bool, error) {
 }
 
 // Migrate perform exact migration
-func (postgres *postgres) migrateScript(filename string, migration string) error {
-	tx, err := postgres.database.Begin()
+func (pg *postgres) migrateScript(filename string, script string) error {
+	tx, err := pg.db.Begin()
 	if err != nil {
 		return err
 	}
 	err = func(tx *sql.Tx) error {
-		_, err := postgres.database.Exec(migration)
+		_, err := pg.db.Exec(script)
 		if err != nil {
 			return err
 		}
-		_, err = postgres.database.Exec("INSERT INTO migrations(name, created_at) VALUES($1, current_timestamp)", filename)
+		_, err = pg.db.Exec("INSERT INTO migrations(name) VALUES ($1)", filename)
 		return err
 	}(tx)
 	if err != nil {
@@ -87,46 +69,54 @@ func (postgres *postgres) migrateScript(filename string, migration string) error
 
 // Migrate run the migrations written in SQL scripts
 func Migrate(db *sql.DB, assetNames func() []string, asset func(name string) ([]byte, error), lastScript *string) error {
-	database := &postgres{database: db}
+	pg := &postgres{db: db}
 
 	// Initialize migrations table, if it does not exist yet
-	if err := database.createMigrationsTable(); err != nil {
+	if err := pg.createMigrationsTable(); err != nil {
 		return err
 	}
 
 	sqlFiles := assetNames()
 	sort.Strings(sqlFiles)
 	for _, filename := range sqlFiles {
+		_, fn := filepath.Split(filename)
+		if strings.HasPrefix(fn, "ignore") {
+			log.Println("Script ignored:", filename)
+			continue
+		}
+
 		ext := filepath.Ext(filename)
 		if ".sql" != ext {
+			log.Println("File ignored as it has no .sql extension:", filename)
 			continue
 		}
 
 		// if exists in migrations table, leave it
 		// else execute sql
-		migrated, err := database.hasMigrated(filename)
+		migrated, err := pg.hasMigrated(filename)
 		if err != nil {
 			return err
 		}
 		if migrated {
-			log.Println("Already migrated", filename)
+			log.Println("Already migrated:", filename)
 			continue
 		}
+
 		b, err := asset(filename)
 		if err != nil {
 			return err
 		}
-		migration := string(b)
-		if len(migration) == 0 {
-			log.Println("Skipping empty file", filename)
+		script := strings.TrimSpace(string(b))
+		if len(script) == 0 {
+			log.Println("Skipping empty file:", filename)
 			continue // empty file
 		}
 		// Run migrations
-		err = database.migrateScript(filename, migration)
+		err = pg.migrateScript(filename, script)
 		if err != nil {
 			return err
 		}
-		log.Println("Migrated", filename)
+		log.Println("Migrated:", filename)
 
 		if lastScript != nil {
 			if *lastScript == filename {
@@ -135,6 +125,5 @@ func Migrate(db *sql.DB, assetNames func() []string, asset func(name string) ([]
 			}
 		}
 	}
-
 	return nil
 }

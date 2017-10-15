@@ -31,7 +31,8 @@ In your app code, import pgmigration package:
 
 Then, run the migrations.
 
-Make sure the migrations have an ".sql" ending.
+**Make sure the migrations have an .sql ending.**  Any script with file
+name prefix as `ignore` will be ignored.
 
 After app startup and after a "sql.DB" instance is initialized in your
 app, run the migrations.  Assuming you have a variable called "db"
