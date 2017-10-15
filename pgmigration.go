@@ -81,24 +81,24 @@ func Migrate(db *sql.DB, assetNames func() []string, asset func(name string) ([]
 	for _, filename := range sqlFiles {
 		_, fn := filepath.Split(filename)
 		if strings.HasPrefix(fn, "ignore") {
-			log.Println("Script ignored:", filename)
+			log.Println("Script ignored:", fn)
 			continue
 		}
 
-		ext := filepath.Ext(filename)
+		ext := filepath.Ext(fn)
 		if ".sql" != ext {
-			log.Println("File ignored as it has no .sql extension:", filename)
+			log.Println("File ignored as it has no .sql extension:", fn)
 			continue
 		}
 
 		// if exists in migrations table, leave it
 		// else execute sql
-		migrated, err := pg.hasMigrated(filename)
+		migrated, err := pg.hasMigrated(fn)
 		if err != nil {
 			return err
 		}
 		if migrated {
-			log.Println("Already migrated:", filename)
+			log.Println("Already migrated:", fn)
 			continue
 		}
 
@@ -108,19 +108,19 @@ func Migrate(db *sql.DB, assetNames func() []string, asset func(name string) ([]
 		}
 		script := strings.TrimSpace(string(b))
 		if len(script) == 0 {
-			log.Println("Skipping empty file:", filename)
+			log.Println("Skipping empty file:", fn)
 			continue // empty file
 		}
 		// Run migrations
-		err = pg.migrateScript(filename, script)
+		err = pg.migrateScript(fn, script)
 		if err != nil {
 			return err
 		}
-		log.Println("Migrated:", filename)
+		log.Println("Migrated:", fn)
 
 		if lastScript != nil {
-			if *lastScript == filename {
-				log.Println("Last script reached:", filename)
+			if *lastScript == fn {
+				log.Println("Last script reached:", fn)
 				break
 			}
 		}
