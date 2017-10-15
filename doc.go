@@ -43,8 +43,7 @@ that points to "sql.DB" and the migrations are located in
 
 	// SchemaMigrate migrate database schema
 	func SchemaMigrate() error {
-		ms := pgmigration.NewMigrationsSource(AssetNames, Asset)
-		return pgmigration.Run(DB, ms)
+		return pgmigration.Migrate(DB, AssetNames, Asset)
 	}
 
 */

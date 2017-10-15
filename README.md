@@ -53,8 +53,7 @@ var DB *sql.DB
 
 // SchemaMigrate migrate database schema
 func SchemaMigrate() error {
-	ms := pgmigration.NewMigrationsSource(AssetNames, Asset)
-	return pgmigration.Run(DB, ms)
+	return pgmigration.Migrate(DB, AssetNames, Asset)
 }
 ```
 

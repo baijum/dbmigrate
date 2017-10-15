@@ -85,8 +85,8 @@ func (postgres *postgres) migrateScript(filename string, migration string) error
 	return err
 }
 
-// Run migrations written in SQL scripts
-func Run(db *sql.DB, migrationsSource MigrationsSource) error {
+// Migrate run the migrations written in SQL scripts
+func Migrate(db *sql.DB, assetNames func() []string, asset func(name string) ([]byte, error)) error {
 	database := &postgres{database: db}
 
 	// Initialize migrations table, if it does not exist yet
@@ -94,7 +94,7 @@ func Run(db *sql.DB, migrationsSource MigrationsSource) error {
 		return err
 	}
 
-	sqlFiles := migrationsSource.AssetNames()
+	sqlFiles := assetNames()
 	sort.Strings(sqlFiles)
 	for _, filename := range sqlFiles {
 		ext := filepath.Ext(filename)
@@ -112,7 +112,7 @@ func Run(db *sql.DB, migrationsSource MigrationsSource) error {
 			log.Println("Already migrated", filename)
 			continue
 		}
-		b, err := migrationsSource.Asset(filename)
+		b, err := asset(filename)
 		if err != nil {
 			return err
 		}
@@ -130,20 +130,4 @@ func Run(db *sql.DB, migrationsSource MigrationsSource) error {
 	}
 
 	return nil
-}
-
-// MigrationsSource includes migrations diectory and bindata AssetDir call back function
-type MigrationsSource struct {
-	AssetNames func() []string
-	Asset      func(name string) ([]byte, error)
-}
-
-// NewMigrationsSource create a migratios source object
-// which includes migrations diectory and bindata AssetDir call back function
-func NewMigrationsSource(assetNames func() []string, asset func(name string) ([]byte, error)) MigrationsSource {
-	ms := MigrationsSource{
-		AssetNames: assetNames,
-		Asset:      asset,
-	}
-	return ms
 }
