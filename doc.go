@@ -47,7 +47,7 @@ that points to "sql.DB" and the migrations are located in
 		return pgmigration.Migrate(DB, AssetNames, Asset, nil)
 	}
 
-The last argument is string pointer which can refer to the last script,
+The last argument is a string pointer which can refer to the last script,
 if there is any.  This will be useful to write tests.
 */
 package pgmigration
