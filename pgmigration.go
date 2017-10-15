@@ -86,7 +86,7 @@ func (postgres *postgres) migrateScript(filename string, migration string) error
 }
 
 // Migrate run the migrations written in SQL scripts
-func Migrate(db *sql.DB, assetNames func() []string, asset func(name string) ([]byte, error)) error {
+func Migrate(db *sql.DB, assetNames func() []string, asset func(name string) ([]byte, error), lastScript *string) error {
 	database := &postgres{database: db}
 
 	// Initialize migrations table, if it does not exist yet
@@ -127,6 +127,13 @@ func Migrate(db *sql.DB, assetNames func() []string, asset func(name string) ([]
 			return err
 		}
 		log.Println("Migrated", filename)
+
+		if lastScript != nil {
+			if *lastScript == filename {
+				log.Println("Last script reached:", filename)
+				break
+			}
+		}
 	}
 
 	return nil
